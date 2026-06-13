@@ -50,13 +50,13 @@ in
     };
 
     bufKb = lib.mkOption {
-      type = lib.types.int;
+      type = lib.types.number.nonnegative;
       default = 256;
       description = "Buffer size in KB.";
     };
 
     poolSize = lib.mkOption {
-      type = lib.types.int;
+      type = lib.types.number.nonnegative;
       default = 4;
       description = "Number of preallocated connections per DC.";
     };
@@ -68,13 +68,13 @@ in
     };
 
     logMaxMb = lib.mkOption {
-      type = lib.types.int;
+      type = lib.types.number.nonnegative;
       default = 5;
       description = "Maximum log file size in MB before rotation.";
     };
 
     logBackups = lib.mkOption {
-      type = lib.types.int;
+      type = lib.types.number.nonnegative;
       default = 0;
       description = "Number of log backups to keep after rotation.";
     };
@@ -98,10 +98,11 @@ in
       example = "proxy.example.com";
     };
 
-    cfproxyPriority = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Try proxying through Cloudflare before direct TCP connection.";
+    cfproxyWorkerDomain = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Custom cloudflare worker domain to use for Cloudflare proxying.";
+      example = "random-symbols-1234.username.workers.dev";
     };
 
     extraArgs = lib.mkOption {
@@ -112,6 +113,16 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    imports = [
+      (lib.mkRemovedOptionModule [
+        "services"
+        "tg-ws-proxy"
+        "cfproxyPriority"
+      ] ''
+        services.tg-ws-proxy.cfproxyPriority got removed in version 1.7.0 and became a standard
+        For reference check https://github.com/Flowseal/tg-ws-proxy/releases/tag/v1.7.0
+      '')
+    ];
     systemd.user.services.tg-ws-proxy = {
       Unit = {
         Description = "Local MTProto proxy for Telegram";
@@ -157,9 +168,9 @@ in
             "--cfproxy-domain"
             cfg.cfproxyDomain
           ]
-          ++ [
-            "--cfproxy-priority"
-            (if cfg.cfproxyPriority then "true" else "false")
+          ++ lib.optionals (cfg.cfproxyWorkerDomain != null) [
+            "--cfproxy-worker-domain"
+            cfg.cfproxyWorkerDomain
           ]
           ++ cfg.extraArgs
         );
